@@ -40,10 +40,13 @@ double normalRand(double mu, double sigma)
 
 void init_weight(matrix_t* w, unsigned nneurones_prev)
 {
-    for (int idx = 0; idx < w->columns * w->rows; idx ++)
-    {
-        w->m[idx] = normalRand(0, 1 / sqrt(nneurones_prev));
+    double m[w->rows * w->columns * sizeof(double)];
+
+    for (int idx = 0; idx < w->columns * w->rows; idx ++) {
+        m[idx] = normalRand(0, 1 / sqrt(nneurones_prev));
     }
+
+    cudaMemcpy(w->m, m, w->columns * w->rows * sizeof(double), cudaMemcpyHostToDevice);
 }
 
 ann_t * create_ann(double alpha, unsigned minibatch_size, unsigned number_of_layers, unsigned* nneurons_per_layer)
@@ -117,6 +120,17 @@ void print_nn(ann_t *nn)
     }
 }
 
+__global__
+void one_kernel(double *m, unsigned rows, unsigned columns){
+    int row = blockIdx.y * blockDim.y + threadIdx.y;
+    int col = blockIdx.x * blockDim.x + threadIdx.x; 
+    int idx = col + row * columns;
+
+    if (idx < rows * columns){
+        m[idx] = 1.0;
+    }
+}
+
 void forward(ann_t *nn, double (*activation_function)(double))
 {
     for (int l = 1; l < nn->number_of_layers; l++)
@@ -124,8 +138,11 @@ void forward(ann_t *nn, double (*activation_function)(double))
         matrix_t *z1 = alloc_matrix(nn->layers[l]->number_of_neurons, nn->minibatch_size);
         matrix_t *z2 = alloc_matrix(nn->layers[l]->number_of_neurons, nn->minibatch_size);
         matrix_t *one = alloc_matrix(1, nn->minibatch_size);
-        for (int idx = 0; idx < one->columns*one->rows; idx++)
-            one->m[idx] = 1.0;
+        
+        dim3 blockDim(16, 16);
+        dim3 gridDim(ceil(((double)one->columns) / blockDim.x), ceil(((double)one->rows) / blockDim.y));
+
+        one_kernel <<< gridDim, blockDim >>> (one->m,  one->rows, one->columns);
 
         matrix_dot(nn->layers[l]->weights, nn->layers[l-1]->activations, z1); // z1 <- w^l x a^(l-1)
         matrix_dot(nn->layers[l]->biases, one, z2); // z2 <- b^l x 1        
@@ -185,8 +202,11 @@ void backward(ann_t *nn, matrix_t *y, double (*derivative_actfunct)(double))
         matrix_t *one, *b1;
         b1 = alloc_matrix(nn->layers[l]->number_of_neurons, 1);
         one = alloc_matrix(nn->minibatch_size, 1);
-        for (int idx = 0; idx < one->columns*one->rows; idx++)
-            one->m[idx] = 1.0;
+
+        dim3 blockDim(16, 16);
+        dim3 gridDim(ceil(((double)one->columns) / blockDim.x), ceil(((double)one->rows) / blockDim.y));
+
+        one_kernel <<< gridDim, blockDim >>> (one->m,  one->rows, one->columns);
 
         matrix_dot(nn->layers[l]->delta, one, b1); // b1 <- delta^l x 1^T
         matrix_scalar(b1,  nn->alpha / nn->minibatch_size, b1); // b1 <- alpha / m . delta^l x 1^T

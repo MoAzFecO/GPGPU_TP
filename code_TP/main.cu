@@ -56,9 +56,13 @@ double accuracy(image* test_img, byte* test_label, unsigned datasize, unsigned m
     for (int i = 0; i < datasize - minibatch_size; i+= minibatch_size)
     {        
         populate_minibatch(x, y, &idx[i], minibatch_size, test_img, 28*28, test_label, 10);
-        memcpy(nn->layers[0]->activations->m, x, 28*28 * minibatch_size * sizeof(double));     
+        cudaMemcpy(nn->layers[0]->activations->m, x, 28*28 * minibatch_size * sizeof(double), cudaMemcpyHostToDevice);     
         
         forward(nn, sigmoid);
+
+        double m1[nn->layers[nn->number_of_layers-1]->activations->rows * nn->layers[nn->number_of_layers-1]->activations->columns * sizeof(double)];
+        cudaMemcpy(m1, nn->layers[nn->number_of_layers-1]->activations->m, nn->layers[nn->number_of_layers-1]->activations->rows * nn->layers[nn->number_of_layers-1]->activations->columns * sizeof(double), cudaMemcpyDeviceToHost);
+
         for (int col = 0; col < minibatch_size; col ++)
         {
             int idxTrainingData = col + i ;
@@ -66,8 +70,8 @@ double accuracy(image* test_img, byte* test_label, unsigned datasize, unsigned m
             unsigned idx_max = 0;
             for (int row = 0; row < 10; row++){
                 int idx = col + row * minibatch_size;
-                if (nn->layers[nn->number_of_layers-1]->activations->m[idx] > max){
-                    max = nn->layers[nn->number_of_layers-1]->activations->m[idx];
+                if (m1[idx] > max){
+                    max = m1[idx];
                     idx_max = row;
                 }
             }
@@ -132,7 +136,7 @@ int main(int argc, char *argv[])
     
     
     
-    for (int epoch = 0; epoch < 4; epoch ++)
+    for (int epoch = 0; epoch < 10; epoch ++)
     {   start = clock();
         printf("start learning epoch %d\n", epoch);
 
@@ -141,9 +145,9 @@ int main(int argc, char *argv[])
         for (int i = 0; i < datasize - minibatch_size ; i+= minibatch_size)
         {
             populate_minibatch(x, y, shuffled_idx+i, minibatch_size, train_img, 28*28, train_label, 10);
-            memcpy(nn->layers[0]->activations->m, x, 28 * 28 * minibatch_size * sizeof(double));
+            cudaMemcpy(nn->layers[0]->activations->m, x, 28 * 28 * minibatch_size * sizeof(double), cudaMemcpyHostToDevice);
             forward(nn, sigmoid);
-            memcpy(out->m, y, 10 * minibatch_size * sizeof(double));            
+            cudaMemcpy(out->m, y, 10 * minibatch_size * sizeof(double), cudaMemcpyHostToDevice);            
             backward(nn, out, dsigmoid);
         }     
         printf("epoch %d accuracy %lf\n", epoch, accuracy(test_img, test_label, ntest, minibatch_size, nn));    
