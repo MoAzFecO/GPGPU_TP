@@ -4,7 +4,7 @@ Dans ce TP, nous avons un code séquentiel écrit en C++ pour entraîner un rés
 
 Vous trouverez dans ce git :
 - code_TP_original : ce fichier possède le code de base en C++
-- code_TP : ce dossier possède les différents fichiers qui parallélise le code en CUDA et des fichiers d'analyse du temps de calcul sur CPU
+- code_TP : ce dossier possède les différents fichiers qui parallélisent le code en CUDA et des fichiers d'analyse du temps de calcul sur CPU
 - img_train : images d'entaînement
 - img_test : images de test
 
