@@ -8,5 +8,5 @@ Vous trouverez dans ce git :
 - img_train : images d'entaînement
 - img_test : images de test
 
-Pour compiler le code en CUDA : nvcc -o ./ann main.cu matrix.cu ann.cu mnist.cu -lm
+Pour compiler le code en CUDA : nvcc -o ./ann main.cu matrix.cu ann.cu mnist.cu -lm  
 Pour run le code : ./ann
