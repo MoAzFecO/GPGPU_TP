@@ -34,16 +34,6 @@ void shuffle(unsigned *t, const unsigned size, const unsigned number_of_switch)
     }
 }
 
-double sigmoid(double x)
-{
-    return 1 / (1 + exp(-x));
-}
-
-double dsigmoid(double x)
-{
-    return sigmoid(x)*(1-sigmoid(x));
-}
-
 double accuracy(image* test_img, byte* test_label, unsigned datasize, unsigned minibatch_size, ann_t *nn)
 {
     unsigned good = 0;
@@ -58,7 +48,7 @@ double accuracy(image* test_img, byte* test_label, unsigned datasize, unsigned m
         populate_minibatch(x, y, &idx[i], minibatch_size, test_img, 28*28, test_label, 10);
         cudaMemcpy(nn->layers[0]->activations->m, x, 28*28 * minibatch_size * sizeof(double), cudaMemcpyHostToDevice);     
         
-        forward(nn, sigmoid);
+        forward(nn);
 
         double m1[nn->layers[nn->number_of_layers-1]->activations->rows * nn->layers[nn->number_of_layers-1]->activations->columns * sizeof(double)];
         cudaMemcpy(m1, nn->layers[nn->number_of_layers-1]->activations->m, nn->layers[nn->number_of_layers-1]->activations->rows * nn->layers[nn->number_of_layers-1]->activations->columns * sizeof(double), cudaMemcpyDeviceToHost);
@@ -122,7 +112,6 @@ int main(int argc, char *argv[])
     unsigned number_of_layers = 3;
     unsigned nneurons_per_layer[3] = {28*28, 30, 10};
     nn = create_ann(alpha, minibatch_size, number_of_layers, nneurons_per_layer);
-    //print_nn(nn);
 
     printf("starting accuracy %lf\n", accuracy(test_img, test_label, ntest, minibatch_size, nn));
 
@@ -133,10 +122,7 @@ int main(int argc, char *argv[])
 
     clock_t start, end;
     
-    
-    
-    
-    for (int epoch = 0; epoch < 10; epoch ++)
+    for (int epoch = 0; epoch < 9; epoch ++)
     {   start = clock();
         printf("start learning epoch %d\n", epoch);
 
@@ -146,22 +132,22 @@ int main(int argc, char *argv[])
         {
             populate_minibatch(x, y, shuffled_idx+i, minibatch_size, train_img, 28*28, train_label, 10);
             cudaMemcpy(nn->layers[0]->activations->m, x, 28 * 28 * minibatch_size * sizeof(double), cudaMemcpyHostToDevice);
-            forward(nn, sigmoid);
+            forward(nn);
             cudaMemcpy(out->m, y, 10 * minibatch_size * sizeof(double), cudaMemcpyHostToDevice);            
-            backward(nn, out, dsigmoid);
-        }     
+            backward(nn, out);
+        }    
         printf("epoch %d accuracy %lf\n", epoch, accuracy(test_img, test_label, ntest, minibatch_size, nn));    
         end=clock();
         double temps = (double)(end-start)/CLOCKS_PER_SEC;
         printf("gpu = %f\n", temps);
     }
 
-    
-
     free(x);
     free(y);
     free(shuffled_idx);
     destroy_matrix(out);   
+
+    //print_nn(nn); pour voir les poids et les bias du réseau de neurones 
     
     return 0;
 }

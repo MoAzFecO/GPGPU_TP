@@ -147,6 +147,18 @@ void matrix_sum(matrix_t *m1, matrix_t *m2, matrix_t *res)
     matrix_sum_kernel <<< gridDim, blockDim >>> (m1->m, m2->m, res->m, m1->rows, m1->columns, m2->columns);
 }
 
+__device__
+double sigmoid(double x)
+{
+    return 1 / (1 + exp(-x));
+}
+
+__device__
+double dsigmoid(double x)
+{
+    return sigmoid(x)*(1-sigmoid(x));
+}
+
 __global__
 void matrix_function_kernel(double (*f)(double), double *m1, double *res, int m1rows, int m1columns){
     int row = blockIdx.y * blockDim.y + threadIdx.y;
@@ -159,18 +171,24 @@ void matrix_function_kernel(double (*f)(double), double *m1, double *res, int m1
     }
 }
 
-void matrix_function0(matrix_t *m1, double (*f)(double), matrix_t *res)
+void matrix_function(matrix_t *m1, double (*f)(double), matrix_t *res)
 {
     assert ( (m1->columns == res->columns) &&             
              (m1->rows == res->rows));
 
+    double (*g)(double);
+    cudaMalloc((void **)&g, sizeof(f));
+    cudaMemcpy((void*)g, (void*)&f, sizeof(f), cudaMemcpyHostToDevice);
+
     dim3 blockDim(16, 16);
     dim3 gridDim(ceil(((double)m1->columns) / blockDim.x), ceil(((double)m1->rows) / blockDim.y));
 
-    matrix_function_kernel <<< gridDim, blockDim >>> (sqrt, m1->m, res->m, m1->rows, m1->columns);
+    matrix_function_kernel <<< gridDim, blockDim >>> (g, m1->m, res->m, m1->rows, m1->columns);
+
+    cudaFree((void*)g);
 }
 
-void matrix_function(matrix_t *m1, double (*f)(double), matrix_t *res)
+void matrix_function2(matrix_t *m1, double (*f)(double), matrix_t *res)
 {
     assert ( (m1->columns == res->columns) &&             
              (m1->rows == res->rows));
@@ -192,10 +210,10 @@ int main(){
     matrix_t *m3 = alloc_matrix(100,100);
     initMatrix(m1);
     initMatrix(m2);
-    matrix_function(m1,sqrt,m3);
+    matrix_function(m1,sigmoid,m3);
     double m[m3->rows * m3->columns * sizeof(double)];
     cudaMemcpy(m, m3->m, m3->rows * m3->columns * sizeof(double), cudaMemcpyDeviceToHost);
-    printf("m[5] = %d", (int)m[9999]);
-    printf("try = %d\n", (int)sqrt(1));
+    printf("m[5] = %d \n", (int)m[9999]);
+    printf("try = %f\n", (double)1 / (1 + exp(-1)));
     return 0;
 }

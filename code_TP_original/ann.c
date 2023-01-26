@@ -40,13 +40,10 @@ double normalRand(double mu, double sigma)
 
 void init_weight(matrix_t* w, unsigned nneurones_prev)
 {
-    double m[w->rows * w->columns * sizeof(double)];
-
-    for (int idx = 0; idx < w->columns * w->rows; idx ++) {
-        m[idx] = normalRand(0, 1 / sqrt(nneurones_prev));
+    for (int idx = 0; idx < w->columns * w->rows; idx ++)
+    {
+        w->m[idx] = normalRand(0, 1 / sqrt(nneurones_prev));
     }
-
-    cudaMemcpy(w->m, m, w->columns * w->rows * sizeof(double), cudaMemcpyHostToDevice);
 }
 
 ann_t * create_ann(double alpha, unsigned minibatch_size, unsigned number_of_layers, unsigned* nneurons_per_layer)
@@ -120,30 +117,21 @@ void print_nn(ann_t *nn)
     }
 }
 
-__global__
-void one_kernel(double *m, unsigned columns){
-    int idx = blockIdx.x * blockDim.x + threadIdx.x; 
-
-    if (idx < columns){
-        m[idx] = 1.0;
-    }
-}
-
-void forward(ann_t *nn)
+void forward(ann_t *nn, double (*activation_function)(double))
 {
     for (int l = 1; l < nn->number_of_layers; l++)
     {
         matrix_t *z1 = alloc_matrix(nn->layers[l]->number_of_neurons, nn->minibatch_size);
         matrix_t *z2 = alloc_matrix(nn->layers[l]->number_of_neurons, nn->minibatch_size);
         matrix_t *one = alloc_matrix(1, nn->minibatch_size);
-        
-        one_kernel <<< ceil((double)one->columns / 256), 256 >>> (one->m, one->columns);
+        for (int idx = 0; idx < one->columns*one->rows; idx++)
+            one->m[idx] = 1.0;
 
         matrix_dot(nn->layers[l]->weights, nn->layers[l-1]->activations, z1); // z1 <- w^l x a^(l-1)
         matrix_dot(nn->layers[l]->biases, one, z2); // z2 <- b^l x 1        
         matrix_sum(z1, z2, nn->layers[l]->z); // z^l <- z1 + z2 <=> z^l <- w^l x a^(l-1) + b^l x 1      
 
-        matrix_function(nn->layers[l]->z, 1, nn->layers[l]->activations); // a^l = f(z^l)
+        matrix_function(nn->layers[l]->z, activation_function, nn->layers[l]->activations); // a^l = f(z^l)
      
         destroy_matrix(z1);
         destroy_matrix(z2);
@@ -151,14 +139,14 @@ void forward(ann_t *nn)
     }
 }
 
-void backward(ann_t *nn, matrix_t *y)
+void backward(ann_t *nn, matrix_t *y, double (*derivative_actfunct)(double))
 {
     unsigned L = nn->number_of_layers-1;
 
     matrix_t *dfzL = alloc_matrix(nn->layers[L]->number_of_neurons, nn->minibatch_size);
 
     matrix_minus(nn->layers[L]->activations, y, nn->layers[L]->delta);  // delta^(L) = (a^L - y)
-    matrix_function(nn->layers[L]->z, 2, dfzL); // f'(z^(L))
+    matrix_function(nn->layers[L]->z, derivative_actfunct, dfzL); // f'(z^(L))
     hadamard_product(nn->layers[L]->delta, dfzL, nn->layers[L]->delta); // delta^(L) = (a^L - y) o f'(z^(L))
 
     destroy_matrix(dfzL);
@@ -172,7 +160,7 @@ void backward(ann_t *nn, matrix_t *y)
 
         matrix_transpose(nn->layers[l]->weights, tw); // (w^l)T        
         matrix_dot(tw, nn->layers[l]->delta, delta_tmp); // (w^l)T x delta^l
-        matrix_function(nn->layers[l-1]->z, 2, dfz); // f'(z^(l-1))
+        matrix_function(nn->layers[l-1]->z, derivative_actfunct, dfz); // f'(z^(l-1))
         hadamard_product(delta_tmp, dfz, nn->layers[l-1]->delta); // delta^(l-1) = (w^l)T x delta^l o f'(z^(l-1))
 
         destroy_matrix(tw);
@@ -197,8 +185,8 @@ void backward(ann_t *nn, matrix_t *y)
         matrix_t *one, *b1;
         b1 = alloc_matrix(nn->layers[l]->number_of_neurons, 1);
         one = alloc_matrix(nn->minibatch_size, 1);
-
-        one_kernel <<< ceil((double)one->rows / 256), 256 >>> (one->m, one->rows);
+        for (int idx = 0; idx < one->columns*one->rows; idx++)
+            one->m[idx] = 1.0;
 
         matrix_dot(nn->layers[l]->delta, one, b1); // b1 <- delta^l x 1^T
         matrix_scalar(b1,  nn->alpha / nn->minibatch_size, b1); // b1 <- alpha / m . delta^l x 1^T

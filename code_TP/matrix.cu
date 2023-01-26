@@ -40,6 +40,9 @@ void print_matrix(matrix_t *m, bool is_short){
         lim_col = m->columns;
     }
 
+    double *h_m = (double *) calloc(m->columns * m->rows, sizeof(double));
+    cudaMemcpy(h_m, m->m, m->columns * m->rows *sizeof(double), cudaMemcpyDeviceToHost);
+
     for (int row = 0; row < lim_rows; row ++)
     {
         for (int col = 0; col < lim_col; col ++)
@@ -192,19 +195,36 @@ void matrix_dot(matrix_t *m1, matrix_t *m2, matrix_t *res)
     matrix_dot_shared_memory <<< gridDim, blockDim >>> (m1->m, m2->m, res->m, m1->rows, m1->columns, m2->columns);
 }
 
+__device__
+double sigmoid(double x)
+{
+    return 1 / (1 + exp(-x));
+}
+
+__device__
+double dsigmoid(double x)
+{
+    return sigmoid(x)*(1-sigmoid(x));
+}
+
 __global__
-void matrix_function_kernel(double (*f)(double), double *m1, double *res, int m1rows, int m1columns){
+void matrix_function_kernel(int i, double *m1, double *res, int m1rows, int m1columns){
     int row = blockIdx.y * blockDim.y + threadIdx.y;
     int col = blockIdx.x * blockDim.x + threadIdx.x; 
 
     int idx = col + row * m1columns;
 
     if (idx < m1rows * m1columns) {
-        res[idx] = f(m1[idx]);
+        if (i ==1) {
+            res[idx] = sigmoid(m1[idx]);
+        }
+        else {
+            res[idx] = dsigmoid(m1[idx]);
+        }
     }
 }
 
-void matrix_function0(matrix_t *m1, double (*f)(double), matrix_t *res)
+void matrix_function(matrix_t *m1, int i, matrix_t *res)
 {
     assert ( (m1->columns == res->columns) &&             
              (m1->rows == res->rows));
@@ -212,10 +232,10 @@ void matrix_function0(matrix_t *m1, double (*f)(double), matrix_t *res)
     dim3 blockDim(16, 16);
     dim3 gridDim(ceil(((double)m1->columns) / blockDim.x), ceil(((double)m1->rows) / blockDim.y));
 
-    matrix_function_kernel <<< gridDim, blockDim >>> (f, m1->m, res->m, m1->rows, m1->columns);
+    matrix_function_kernel <<< gridDim, blockDim >>> (i, m1->m, res->m, m1->rows, m1->columns);
 }
 
-void matrix_function(matrix_t *m1, double (*f)(double), matrix_t *res)
+void matrix_function_cpu(matrix_t *m1, double (*f)(double), matrix_t *res)
 {
     assert ( (m1->columns == res->columns) &&             
              (m1->rows == res->rows));
