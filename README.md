@@ -1,10 +1,10 @@
-# TP GPGPU :  réseau de neuronnes
+# TP GPGPU :  réseau de neurones
 
-Dans ce TP, nous avons un code séquentiel écrit en C++ pour entraîner un réseau de neuronnes. Nous avons paralléliser ce code pour GPU en utilisant CUDA afin de diminuer le temps de calcul.
+Dans ce TP, nous avons un code séquentiel écrit en C++ qui permet d'entraîner un réseau de neurones. Nous avons parallélisé ce code pour GPU en utilisant CUDA afin de diminuer le temps de calcul.
 
 Vous trouverez dans ce git :
 - code_TP_original : ce fichier possède le code de base en C++
-- code_TP : ce dossier possède les différents fichiers qui parallélisent le code en CUDA et des fichiers d'analyse du temps de calcul sur CPU
+- code_TP : ce dossier possède les différents fichiers qui parallélisent le code en CUDA et un dossier avec deux fichiers d'analyse du temps de calcul sur CPU avec et sans GPU
 - img_train : images d'entaînement
 - img_test : images de test
 
